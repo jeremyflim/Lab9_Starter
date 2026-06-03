@@ -8,6 +8,12 @@
   <title>Lab 9</title>
 
   <style>
+    body {
+      color: #222;
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 24px;
+    }
+
     button {
       margin: 3px;
     }
@@ -18,16 +24,16 @@
 
     #first-num,
     #second-num {
-      width: 60px;
+      width: 70px;
     }
 
     output {
       border: 1px solid gray;
       display: block;
-      height: 18px;
+      min-height: 18px;
       margin-top: 5px;
       padding: 5px;
-      width: 240px;
+      width: 300px;
     }
 
     main {
@@ -42,11 +48,23 @@
       row-gap: 5px;
     }
 
-    #error-btns>* {
+    #error-btns > * {
       padding: 8px 2px;
       width: 122px;
     }
+
+    #status-message {
+      min-height: 20px;
+    }
   </style>
+
+  <script src="https://cdn.trackjs.com/agent/v3/latest/t.js"></script>
+  <script>
+    window.TrackJS && TrackJS.install({
+      token: "bfe72de7605642068ac18765946c26a5"
+      // for more configuration options, see https://docs.trackjs.com
+    });
+  </script>
 </head>
 
 <body>
@@ -54,17 +72,18 @@
     <form>
       <fieldset>
         <legend>Error Calculator</legend>
-        <input name="first-num" id="first-num" />
+        <input name="first-num" id="first-num" placeholder="First" />
         <select name="operator" id="operator">
           <option>+</option>
           <option>-</option>
           <option>*</option>
           <option>/</option>
         </select>
-        <input name="second-num" id="second-num" />
+        <input name="second-num" id="second-num" placeholder="Second" />
         <button id="calculate">Calculate</button>
         <br />
         <output></output>
+        <p id="status-message" aria-live="polite"></p>
       </fieldset>
     </form>
 
@@ -88,20 +107,205 @@
   </main>
 
   <script>
-    let form = document.querySelector('form');
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      let output = document.querySelector('output');
-      let firstNum = document.querySelector('#first-num').value;
-      let secondNum = document.querySelector('#second-num').value;
-      let operator = document.querySelector('#operator').value;
-      output.innerHTML = eval(`${firstNum} ${operator} ${secondNum}`);
+    class CalculatorInputError extends Error {
+      constructor(message, fieldName) {
+        super(message);
+        this.name = 'CalculatorInputError';
+        this.fieldName = fieldName;
+      }
+    }
+
+    const form = document.querySelector('form');
+    const output = document.querySelector('output');
+    const statusMessage = document.querySelector('#status-message');
+    const firstNumInput = document.querySelector('#first-num');
+    const secondNumInput = document.querySelector('#second-num');
+    const operatorInput = document.querySelector('#operator');
+    const errorBtns = Array.from(document.querySelectorAll('#error-btns > button'));
+    const demoTimerName = 'console timer demo';
+    let consoleGroupIsOpen = false;
+
+    const sampleCheckout = {
+      orderId: 'LAB9-1042',
+      customer: 'Student Tester',
+      items: [
+        { name: 'Notebook', quantity: 2, price: 4.25 },
+        { name: 'Pen Pack', quantity: 1, price: 6.5 },
+        { name: 'USB Cable', quantity: 1, price: 8.75 }
+      ],
+      shipping: {
+        method: 'campus pickup',
+        ready: true
+      }
+    };
+
+    function readNumber(input, fieldName) {
+      const trimmedValue = input.value.trim();
+
+      if (trimmedValue === '') {
+        throw new CalculatorInputError(`${fieldName} is required.`, fieldName);
+      }
+
+      const numberValue = Number(trimmedValue);
+
+      if (!Number.isFinite(numberValue)) {
+        throw new CalculatorInputError(`${fieldName} must be a valid number.`, fieldName);
+      }
+
+      return numberValue;
+    }
+
+    function calculate(firstNum, operator, secondNum) {
+      if (operator === '+') {
+        return firstNum + secondNum;
+      }
+
+      if (operator === '-') {
+        return firstNum - secondNum;
+      }
+
+      if (operator === '*') {
+        return firstNum * secondNum;
+      }
+
+      if (secondNum === 0) {
+        throw new CalculatorInputError('Cannot divide by zero.', 'Second Number');
+      }
+
+      return firstNum / secondNum;
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+
+      try {
+        statusMessage.textContent = 'Running calculator...';
+
+        const firstNum = readNumber(firstNumInput, 'First Number');
+        const secondNum = readNumber(secondNumInput, 'Second Number');
+        const result = calculate(firstNum, operatorInput.value, secondNum);
+
+        output.textContent = `${firstNum} ${operatorInput.value} ${secondNum} = ${result}`;
+        console.log('Calculator success:', {
+          firstNum,
+          operator: operatorInput.value,
+          secondNum,
+          result
+        });
+      } catch (error) {
+        if (error instanceof CalculatorInputError) {
+          output.textContent = error.message;
+          console.error('CalculatorInputError caught:', {
+            message: error.message,
+            fieldName: error.fieldName
+          });
+        } else {
+          output.textContent = 'Unexpected calculator error. Check the console.';
+          console.error('Unexpected calculator error caught:', error);
+        }
+      } finally {
+        statusMessage.textContent = `Last calculator attempt: ${new Date().toLocaleTimeString()}`;
+      }
     });
 
-    let errorBtns = Array.from(document.querySelectorAll('#error-btns > button'));
+    window.onerror = function handleGlobalError(message, source, line, column, error) {
+      console.error('Global error caught with window.onerror:', {
+        message,
+        source,
+        line,
+        column,
+        error
+      });
 
-    // Start your code here
-    // You may move this JS to another file if you wish
+      return false;
+    };
+
+    window.addEventListener('error', event => {
+      console.log('Global error event observed:', event.message);
+    });
+
+    const buttonActions = {
+      'Console Log': () => {
+        console.log('Console log demo:', sampleCheckout);
+      },
+      'Console Error': () => {
+        console.error('Console error demo: payment authorization failed for', sampleCheckout.orderId);
+      },
+      'Console Count': () => {
+        console.count('Console count demo clicks');
+      },
+      'Console Warn': () => {
+        console.warn('Console warn demo: shipping estimate needs to be refreshed.');
+      },
+      'Console Assert': () => {
+        const allQuantitiesArePositive = sampleCheckout.items.every(item => item.quantity > 0);
+        console.assert(allQuantitiesArePositive, 'Every item should have a positive quantity.');
+        console.assert(sampleCheckout.items.length > 4, 'Console assert demo: expected more checkout items.', sampleCheckout.items);
+      },
+      'Console Clear': () => {
+        console.clear();
+        console.log('Console clear demo: console was cleared.');
+      },
+      'Console Dir': () => {
+        console.dir(document.querySelector('form'));
+      },
+      'Console dirxml': () => {
+        console.dirxml(document.querySelector('fieldset'));
+      },
+      'Console Group Start': () => {
+        console.group('Console group demo: checkout');
+        consoleGroupIsOpen = true;
+        console.log('Order:', sampleCheckout.orderId);
+        console.log('Customer:', sampleCheckout.customer);
+        console.groupCollapsed('Checkout items');
+        sampleCheckout.items.forEach(item => console.log(item));
+        console.groupEnd();
+      },
+      'Console Group End': () => {
+        if (consoleGroupIsOpen) {
+          console.log('Ending checkout console group.');
+          console.groupEnd();
+          consoleGroupIsOpen = false;
+        } else {
+          console.warn('No console group is currently open.');
+        }
+      },
+      'Console Table': () => {
+        console.table(sampleCheckout.items);
+      },
+      'Start Timer': () => {
+        console.time(demoTimerName);
+        statusMessage.textContent = 'Timer started.';
+      },
+      'End Timer': () => {
+        console.timeEnd(demoTimerName);
+        statusMessage.textContent = 'Timer ended. Check the console.';
+      },
+      'Console Trace': () => {
+        function traceStepOne() {
+          traceStepTwo();
+        }
+
+        function traceStepTwo() {
+          console.trace('Console trace demo');
+        }
+
+        traceStepOne();
+      },
+      'Trigger a Global Error': () => {
+        setTimeout(() => {
+          const missingCartTotal = document.querySelector('#cart-total');
+          missingCartTotal.textContent = 'Updated cart total';
+        }, 0);
+      }
+    };
+
+    errorBtns.forEach(button => {
+      button.addEventListener('click', () => {
+        const buttonText = button.textContent.trim();
+        buttonActions[buttonText]();
+      });
+    });
   </script>
 </body>
 
